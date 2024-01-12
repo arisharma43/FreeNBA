@@ -17,6 +17,7 @@ const Index = () => {
   const [timestamp, setTimestamp] = useState("");
   const [teamFrameA, setTeamFrameA] = useState([]);
   const [teamFrameP, setTeamFrameP] = useState([]);
+  const [playerStats, setPlayerStats] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,11 +28,12 @@ const Index = () => {
         setTeamFrameA(data.team_frame_american);
         setTeamFrameP(data.team_frame_percent);
         setTimestamp(data.timestamp);
+        setPlayerStats(data.player_stats);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     };
-    
+
     fetchData();
   }, []);
 

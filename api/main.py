@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import io
-
+import math
 
 app = FastAPI()
 
@@ -26,11 +26,11 @@ app.add_middleware(
 class PlayerStats(BaseModel):
     player: str
     prop_type: str
-    prop: str
-    mean_outcome: float
-    imp_over: float
+    prop: Optional[float] = None
+    mean_outcome: float  # Change the type from str to float
+    imp_over: Optional[float] = None
     over_percent: float
-    imp_under: float
+    imp_under: Optional[float] = None
     under_percent: float
     bet: Optional[str] = None
     edge: Optional[float] = None
@@ -40,58 +40,7 @@ class DataItem(BaseModel):
     team_frame_percent: dict
     team_frame_american: dict
     timestamp: str
-    # player_stats: List[PlayerStats]
-
-
-game_format = {"Win%": "{:.2%}"}
-prop_format = {
-    "L5 Success": "{:.2%}",
-    "L10_Success": "{:.2%}",
-    "L20_success": "{:.2%}",
-    "Matchup Boost": "{:.2%}",
-    "Trending Over": "{:.2%}",
-    "Trending Under": "{:.2%}",
-    "Implied Over": "{:.2%}",
-    "Implied Under": "{:.2%}",
-    "Over Edge": "{:.2%}",
-    "Under Edge": "{:.2%}",
-}
-prop_table_options = [
-    "points",
-    "threes",
-    "rebounds",
-    "assists",
-    "blocks",
-    "steals",
-    "PRA",
-    "points+rebounds",
-    "points+assists",
-    "rebounds+assists",
-]
-all_sim_vars = [
-    "points",
-    "rebounds",
-    "assists",
-    "threes",
-    "PRA",
-    "points+rebounds",
-    "points+assists",
-    "rebounds+assists",
-]
-sim_all_hold = pd.DataFrame(
-    columns=[
-        "player",
-        "prop_type",
-        "prop",
-        "mean_outcome",
-        "imp_over",
-        "over_percent",
-        "imp_under",
-        "under_percent",
-        "bet",
-        "edge",
-    ]
-)
+    player_stats: List[PlayerStats]
 
 
 @app.get("/api/python", response_model=List[DataItem])
@@ -136,10 +85,10 @@ async def read_data():
         "team_frame_percent": team_frame_percentage.to_dict(),
         "team_frame_american": team_frame_american.to_dict(),
         "timestamp": timestamp,
-        # "player_stats": player_stats_to_list(player_stats),
+        "player_stats": player_stats_to_list(prop_frame, player_stats),
     }
-    print(data)
-    print(player_stats_to_list(prop_frame))
+    # print(data)
+    # print(player_stats_to_list(prop_frame, player_stats))
     return [DataItem(**data)]
 
 
@@ -148,7 +97,83 @@ async def read_data():
 #     raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
 
 
+def player_stats_to_list(prop_frame, player_stats):
+    finalized_data = clean_data(prop_frame, player_stats)
+    player_stats_list = []
+    for _, row in finalized_data.iterrows():
+        for key, value in row.items():
+            if isinstance(value, float) and (
+                value == float("inf") or value == float("-inf") or math.isnan(value)
+            ):
+                row[key] = None
+        # print(row)
+        player_stats_list.append(
+            PlayerStats(
+                player=row["Player"],
+                prop_type=row["Prop type"],
+                prop=row["Prop"],
+                mean_outcome=row["Mean_Outcome"],
+                imp_over=row["Imp Over"],
+                over_percent=row["Over%"],
+                imp_under=row["Imp Under"],
+                under_percent=row["Under%"],
+                bet=row["Bet?"],
+                edge=row["Edge"],
+            )
+        )
+    return player_stats_list
+
+
 def clean_data(prop_frame, player_stats):
+    game_format = {"Win%": "{:.2%}"}
+    prop_format = {
+        "L5 Success": "{:.2%}",
+        "L10_Success": "{:.2%}",
+        "L20_success": "{:.2%}",
+        "Matchup Boost": "{:.2%}",
+        "Trending Over": "{:.2%}",
+        "Trending Under": "{:.2%}",
+        "Implied Over": "{:.2%}",
+        "Implied Under": "{:.2%}",
+        "Over Edge": "{:.2%}",
+        "Under Edge": "{:.2%}",
+    }
+    prop_table_options = [
+        "points",
+        "threes",
+        "rebounds",
+        "assists",
+        "blocks",
+        "steals",
+        "PRA",
+        "points+rebounds",
+        "points+assists",
+        "rebounds+assists",
+    ]
+    all_sim_vars = [
+        "points",
+        "rebounds",
+        "assists",
+        "threes",
+        "PRA",
+        "points+rebounds",
+        "points+assists",
+        "rebounds+assists",
+    ]
+    sim_all_hold = pd.DataFrame(
+        columns=[
+            "player",
+            "prop_type",
+            "prop",
+            "mean_outcome",
+            "imp_over",
+            "over_percent",
+            "imp_under",
+            "under_percent",
+            "bet",
+            "edge",
+        ]
+    )
     for prop in all_sim_vars:
         prop_df = prop_frame[
             ["Player", "over_prop", "over_line", "under_line", "prop_type"]
@@ -173,7 +198,6 @@ def clean_data(prop_frame, player_stats):
             how="left",
             left_on=["Player"],
             right_on=["Player"],
-            validate="many_to_many",
         )
         prop_dict = dict(zip(df.Player, df.Prop))
         over_dict = dict(zip(df.Player, df.Over))
@@ -181,7 +205,8 @@ def clean_data(prop_frame, player_stats):
 
         total_sims = 5000
 
-        df.replace("", 0, inplace=True)
+        df.fillna(0, inplace=True)
+        df.replace([np.inf, -np.inf], 0, inplace=True)
 
         if prop == "points":
             df["Median"] = df["Points"]
@@ -294,30 +319,8 @@ def clean_data(prop_frame, player_stats):
         sim_all_hold = pd.concat([sim_all_hold, leg_outcomes], ignore_index=True)
 
         final_outcomes = sim_all_hold
-
-
-def player_stats_to_list(player_stats_df):
-    prop_df = player_stats_df[
-        ["Player", "over_prop", "over_line", "under_line", "prop_type"]
-    ]
-    player_stats_list = []
-    for _, row in prop_df.iterrows():
-        print(row)
-        # player_stats_list.append(
-        #     PlayerStats(
-        #         player=row["Player"],
-        #         prop_type=row["prop_type"],
-        #         prop=row["prop"],
-        #         mean_outcome=row["mean_outcome"],
-        #         imp_over=row["imp_over"],
-        #         over_percent=row["over_percent"],
-        #         imp_under=row["imp_under"],
-        #         under_percent=row["under_percent"],
-        #         bet=row["bet"],
-        #         edge=row["edge"],
-        #     )
-        # )
-    return player_stats_list
+        # print(final_outcomes)
+        return final_outcomes
 
 
 def init_conn():
@@ -520,76 +523,3 @@ def init_baselines(gcservice_account, master_hold):
 
 def convert_df_to_csv(df):
     return df.to_csv().encode("utf-8")
-
-
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    [
-        "Game Betting Model",
-        "Player Projections",
-        "Prop Trend Table",
-        "Player Prop Simulations",
-        "Stat Specific Simulations",
-    ]
-)
-
-
-def reset():
-    game_model, player_stats, prop_frame, pick_frame, timestamp = init_baselines()
-    t_stamp = f"Last Update: " + str(timestamp) + f" CST"
-
-
-def get_data(game_model):
-    line_var1 = st.radio(
-        "How would you like to display odds?",
-        options=["Percentage", "American"],
-        key="line_var1",
-    )
-    team_frame = game_model
-    if line_var1 == "Percentage":
-        team_frame = team_frame[
-            [
-                "Team",
-                "Opp",
-                "Team Points",
-                "Opp Points",
-                "Proj Total",
-                "Proj Spread",
-                "Proj Winner",
-                "Win%",
-            ]
-        ]
-        team_frame = team_frame.set_index("Team")
-        st.dataframe(
-            team_frame.style.background_gradient(axis=0)
-            .background_gradient(cmap="RdYlGn")
-            .format(game_format, precision=2),
-            use_container_width=True,
-        )
-    if line_var1 == "American":
-        team_frame = team_frame[
-            [
-                "Team",
-                "Opp",
-                "Team Points",
-                "Opp Points",
-                "Proj Total",
-                "Proj Spread",
-                "Proj Winner",
-                "Odds Line",
-            ]
-        ]
-        team_frame = team_frame.set_index("Team")
-        st.dataframe(
-            team_frame.style.background_gradient(axis=0)
-            .background_gradient(cmap="RdYlGn")
-            .format(precision=2),
-            use_container_width=True,
-        )
-
-    st.download_button(
-        label="Export Team Model",
-        data=convert_df_to_csv(team_frame),
-        file_name="NBA_team_betting_export.csv",
-        mime="text/csv",
-        key="team_export",
-    )
