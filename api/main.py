@@ -121,6 +121,9 @@ def player_stats_to_list(prop_frame, player_stats):
                 edge=row["Edge"],
             )
         )
+        player_stats_list = sorted(
+            player_stats_list, key=lambda x: (x.edge, -x.edge), reverse=True
+        )
     return player_stats_list
 
 
