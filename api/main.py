@@ -9,6 +9,9 @@ import numpy as np
 import streamlit as st
 import io
 import math
+import warnings
+
+warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
@@ -112,6 +115,7 @@ async def read_data():
 
 def player_stats_to_list(prop_frame, player_stats):
     finalized_data = clean_data(prop_frame, player_stats)
+    # print(finalized_data)
     player_stats_list = []
     for _, row in finalized_data.iterrows():
         for key, value in row.items():
@@ -134,9 +138,14 @@ def player_stats_to_list(prop_frame, player_stats):
                 edge=row["Edge"],
             )
         )
-        player_stats_list = sorted(
-            player_stats_list, key=lambda x: (x.edge, -x.edge), reverse=True
-        )
+    player_stats_list = sorted(
+        player_stats_list,
+        key=lambda x: (
+            x.edge if x.edge is not None else float("-inf"),
+            -(x.edge if x.edge is not None else float("-inf")),
+        ),
+        reverse=True,
+    )
     return player_stats_list
 
 
@@ -190,24 +199,29 @@ def clean_data(prop_frame, player_stats):
             "edge",
         ]
     )
+    # print(prop_frame)
     for prop in all_sim_vars:
         prop_df = prop_frame[
-            ["Player", "over_prop", "over_line", "under_line", "prop_type"]
+            ["Player", "over_prop", "over_line", "under_line", "PropType"]
         ]
-        prop_df = prop_df.loc[prop_df["prop_type"] == prop]
+        prop_df = prop_df.loc[prop_df["PropType"] == prop]
         prop_df = prop_df[["Player", "over_prop", "over_line", "under_line"]]
         prop_df.rename(columns={"over_prop": "Prop"}, inplace=True)
         prop_df = prop_df.loc[prop_df["Prop"] != 0]
+        print(prop_df)
+
         prop_df["Over"] = np.where(
             prop_df["over_line"] < 0,
             (-(prop_df["over_line"]) / ((-(prop_df["over_line"])) + 101)),
             101 / (prop_df["over_line"] + 101),
         )
+
         prop_df["Under"] = np.where(
             prop_df["under_line"] < 0,
             (-(prop_df["under_line"]) / ((-(prop_df["under_line"])) + 101)),
             101 / (prop_df["under_line"] + 101),
         )
+
         df = pd.merge(
             player_stats,
             prop_df,
@@ -481,8 +495,8 @@ def init_baselines(gcservice_account, master_hold):
 
     worksheet = sh.worksheet("Prop_Frame")
     raw_display = pd.DataFrame(worksheet.get_all_records())
-    print("Column Names in Google Sheet:")
-    print(raw_display.columns.tolist())
+    # print("Column Names in Google Sheet:")
+    # print(raw_display.columns.tolist())
     raw_display.replace("", np.nan, inplace=True)
 
     raw_display.rename(
@@ -499,7 +513,7 @@ def init_baselines(gcservice_account, master_hold):
     raw_display.replace("", np.nan, inplace=True)
     pick_frame = raw_display.dropna(subset="Player")
 
-    #account for inconsistencies in names
+    # account for inconsistencies in names
     prop_frame["Player"].replace(
         [
             "Jaren Jackson",
