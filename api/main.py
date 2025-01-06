@@ -57,12 +57,21 @@ async def read_data():
         [
             "Team",
             "Opp",
-            "Team Points",
-            "Opp Points",
-            "Proj Total",
-            "Proj Spread",
-            "Proj Winner",
-            "Win%",
+            "PD Team Points",
+            "VEG Team Points",
+            "PD Opp Points",
+            "VEG Opp Points",
+            "PD Proj Total",
+            "VEG Proj Total",
+            "PD Over%",
+            "PD Over Odds",
+            "PD Under%",
+            "PD Under Odds",
+            "PD Proj Winner",
+            "PD Proj Spread",
+            "PD W Spread",
+            "PD Win%",
+            "PD Odds",
         ]
     ]
     team_frame_percentage = team_frame_percentage.set_index("Team")
@@ -71,12 +80,16 @@ async def read_data():
         [
             "Team",
             "Opp",
-            "Team Points",
-            "Opp Points",
-            "Proj Total",
-            "Proj Spread",
-            "Proj Winner",
-            "Odds Line",
+            "PD Team Points",
+            "VEG Team Points",
+            "PD Opp Points",
+            "VEG Opp Points",
+            "PD Proj Total",
+            "VEG Proj Total",
+            "PD Proj Spread",
+            "PD W Spread",
+            "PD Win%",
+            "PD Odds",
         ]
     ]
     team_frame_american = team_frame_american.set_index("Team")
@@ -128,7 +141,7 @@ def player_stats_to_list(prop_frame, player_stats):
 
 
 def clean_data(prop_frame, player_stats):
-    game_format = {"Win%": "{:.2%}"}
+    game_format = {"PD Win%": "{:.2%}"}
     prop_format = {
         "L5 Success": "{:.2%}",
         "L10_Success": "{:.2%}",
@@ -354,7 +367,7 @@ gcservice_account = init_conn()
 
 master_hold = "https://docs.google.com/spreadsheets/d/1Yq0vGriWK-bS79e-bD6_u9pqrYE6Yrlbb_wEkmH-ot0/edit#gid=853878325"
 
-game_format = {"Win%": "{:.2%}"}
+game_format = {"PD Win%": "{:.2%}"}
 prop_format = {
     "L5 Success": "{:.2%}",
     "L10_Success": "{:.2%}",
@@ -409,9 +422,10 @@ def init_baselines(gcservice_account, master_hold):
     sh = gcservice_account.open_by_url(master_hold)
     worksheet = sh.worksheet("Betting Model Clean")
     raw_display = pd.DataFrame(worksheet.get_all_records())
+
     raw_display.replace("#DIV/0!", np.nan, inplace=True)
-    raw_display["Win%"] = (
-        raw_display["Win%"].replace({"%": ""}, regex=True).astype(float) / 100
+    raw_display["PD Win%"] = (
+        raw_display["PD Win%"].replace({"%": ""}, regex=True).astype(float) / 100
     )
     game_model = raw_display.dropna()
 
@@ -467,7 +481,17 @@ def init_baselines(gcservice_account, master_hold):
 
     worksheet = sh.worksheet("Prop_Frame")
     raw_display = pd.DataFrame(worksheet.get_all_records())
+    print("Column Names in Google Sheet:")
+    print(raw_display.columns.tolist())
     raw_display.replace("", np.nan, inplace=True)
+
+    raw_display.rename(
+        columns={
+            "Name": "Player",  # Assuming "Name" corresponds to "Player" for alignment
+        },
+        inplace=True,
+    )
+
     prop_frame = raw_display.dropna(subset="Player")
 
     worksheet = sh.worksheet("Pick6_ingest")
@@ -475,6 +499,7 @@ def init_baselines(gcservice_account, master_hold):
     raw_display.replace("", np.nan, inplace=True)
     pick_frame = raw_display.dropna(subset="Player")
 
+    #account for inconsistencies in names
     prop_frame["Player"].replace(
         [
             "Jaren Jackson",
