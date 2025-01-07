@@ -175,15 +175,25 @@ def clean_data(prop_frame, player_stats):
         "points+assists",
         "rebounds+assists",
     ]
+    # all_sim_vars = [
+    #     "points",
+    #     "rebounds",
+    #     "assists",
+    #     "threes",
+    #     "PRA",
+    #     "points+rebounds",
+    #     "points+assists",
+    #     "rebounds+assists",
+    # ]
     all_sim_vars = [
-        "points",
-        "rebounds",
-        "assists",
-        "threes",
-        "PRA",
-        "points+rebounds",
-        "points+assists",
-        "rebounds+assists",
+        "NBA_GAME_PLAYER_POINTS",
+        "NBA_GAME_PLAYER_REBOUNDS",
+        "NBA_GAME_PLAYER_ASSISTS",
+        "NBA_GAME_PLAYER_POINTS_REBOUNDS_ASSISTS",
+        "NBA_GAME_PLAYER_POINTS_REBOUNDS",
+        "NBA_GAME_PLAYER_POINTS_ASSISTS",
+        "NBA_GAME_PLAYER_REBOUNDS_ASSISTS",
+        "NBA_GAME_PLAYER_3_POINTERS_MADE",
     ]
     sim_all_hold = pd.DataFrame(
         columns=[
@@ -199,61 +209,92 @@ def clean_data(prop_frame, player_stats):
             "edge",
         ]
     )
-    # print(prop_frame)
+    player_df = player_stats.copy()
+    # print(prop_frame.columns.tolist())
     for prop in all_sim_vars:
         prop_df = prop_frame[
-            ["Player", "over_prop", "over_line", "under_line", "PropType"]
+            [
+                "Player",
+                "over_prop",
+                "over_line",
+                "under_line",
+                "PropType",
+                "Trending Over",
+                "Trending Under",
+            ]
         ]
         prop_df = prop_df.loc[prop_df["PropType"] == prop]
-        prop_df = prop_df[["Player", "over_prop", "over_line", "under_line"]]
+        # prop_df = prop_frame[
+        #     ["Player", "over_prop", "over_line", "under_line", "PropType"]
+        # ]
+
+        # prop_df = prop_df[["Player", "over_prop", "over_line", "under_line"]]
         prop_df.rename(columns={"over_prop": "Prop"}, inplace=True)
-        prop_df = prop_df.loc[prop_df["Prop"] != 0]
-        print(prop_df)
+        # prop_df = prop_df.loc[prop_df["Prop"] != 0]
 
-        prop_df["Over"] = np.where(
-            prop_df["over_line"] < 0,
-            (-(prop_df["over_line"]) / ((-(prop_df["over_line"])) + 101)),
-            101 / (prop_df["over_line"] + 101),
-        )
+        # prop_df["Over"] = np.where(
+        #     prop_df["over_line"] < 0,
+        #     (-(prop_df["over_line"]) / ((-(prop_df["over_line"])) + 101)),
+        #     101 / (prop_df["over_line"] + 101),
+        # )
 
-        prop_df["Under"] = np.where(
-            prop_df["under_line"] < 0,
-            (-(prop_df["under_line"]) / ((-(prop_df["under_line"])) + 101)),
-            101 / (prop_df["under_line"] + 101),
-        )
+        # prop_df["Under"] = np.where(
+        #     prop_df["under_line"] < 0,
+        #     (-(prop_df["under_line"]) / ((-(prop_df["under_line"])) + 101)),
+        #     101 / (prop_df["under_line"] + 101),
+        # )
+        prop_df["Over"] = 1 / prop_df["over_line"]
+        prop_df["Under"] = 1 / prop_df["under_line"]
 
-        df = pd.merge(
-            player_stats,
-            prop_df,
-            how="left",
-            left_on=["Player"],
-            right_on=["Player"],
-        )
-        prop_dict = dict(zip(df.Player, df.Prop))
-        over_dict = dict(zip(df.Player, df.Over))
-        under_dict = dict(zip(df.Player, df.Under))
+        # df = pd.merge(
+        #     player_stats,
+        #     prop_df,
+        #     how="left",
+        #     left_on=["Player"],
+        #     right_on=["Player"],
+        # )
+        prop_dict = dict(zip(prop_df.Player, prop_df.Prop))
+        prop_type_dict = dict(zip(prop_df.Player, prop_df.PropType))
+        over_dict = dict(zip(prop_df.Player, prop_df.Over))
+        under_dict = dict(zip(prop_df.Player, prop_df.Under))
+        trending_over_dict = dict(zip(prop_df.Player, prop_df["Trending Over"]))
+        trending_under_dict = dict(zip(prop_df.Player, prop_df["Trending Under"]))
+
+        player_df["Prop"] = player_df["Player"].map(prop_dict)
+        player_df["prop_type"] = player_df["Player"].map(prop_type_dict)
+        player_df["Trending Over"] = player_df["Player"].map(trending_over_dict)
+        player_df["Trending Under"] = player_df["Player"].map(trending_under_dict)
+
+        df = player_df.reset_index(drop=True)
+
+        team_dict = dict(zip(df.Player, df.Team))
 
         total_sims = 5000
+
+        print(df)
 
         df.fillna(0, inplace=True)
         df.replace([np.inf, -np.inf], 0, inplace=True)
 
-        if prop == "points":
+        if prop == "NBA_GAME_PLAYER_POINTS" or prop == "Points":
             df["Median"] = df["Points"]
-        elif prop == "rebounds":
+        elif prop == "NBA_GAME_PLAYER_REBOUNDS" or prop == "Rebounds":
             df["Median"] = df["Rebounds"]
-        elif prop == "assists":
+        elif prop == "NBA_GAME_PLAYER_ASSISTS" or prop == "Assists":
             df["Median"] = df["Assists"]
-        elif prop == "threes":
+        elif prop == "NBA_GAME_PLAYER_3_POINTERS_MADE" or prop == "3-Pointers Made":
             df["Median"] = df["3P"]
-        elif prop == "PRA":
+        elif (
+            prop == "NBA_GAME_PLAYER_POINTS_REBOUNDS_ASSISTS"
+            or prop == "Points + Assists + Rebounds"
+        ):
             df["Median"] = df["Points"] + df["Rebounds"] + df["Assists"]
-        elif prop == "points+rebounds":
+        elif prop == "NBA_GAME_PLAYER_POINTS_REBOUNDS" or prop == "Points + Rebounds":
             df["Median"] = df["Points"] + df["Rebounds"]
-        elif prop == "points+assists":
+        elif prop == "NBA_GAME_PLAYER_POINTS_ASSISTS" or prop == "Points + Assists":
             df["Median"] = df["Points"] + df["Assists"]
-        elif prop == "rebounds+assists":
-            df["Median"] = df["Assists"] + df["Rebounds"]
+        elif prop == "NBA_GAME_PLAYER_REBOUNDS_ASSISTS" or prop == "Assists + Rebounds":
+            df["Median"] = df["Rebounds"] + df["Assists"]
 
         flex_file = df
         flex_file["Floor"] = (flex_file["Median"] * 0.25) + (
@@ -436,7 +477,7 @@ def init_baselines(gcservice_account, master_hold):
     sh = gcservice_account.open_by_url(master_hold)
     worksheet = sh.worksheet("Betting Model Clean")
     raw_display = pd.DataFrame(worksheet.get_all_records())
-
+    # print(raw_display.columns.tolist())
     raw_display.replace("#DIV/0!", np.nan, inplace=True)
     raw_display["PD Win%"] = (
         raw_display["PD Win%"].replace({"%": ""}, regex=True).astype(float) / 100
