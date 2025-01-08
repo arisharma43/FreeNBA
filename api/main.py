@@ -78,7 +78,7 @@ async def read_data():
         ]
     ]
     team_frame_percentage = team_frame_percentage.set_index("Team")
-
+    print(team_frame_percentage)
     team_frame_american = game_model[
         [
             "Team",
@@ -96,6 +96,7 @@ async def read_data():
         ]
     ]
     team_frame_american = team_frame_american.set_index("Team")
+    print(team_frame_american)
 
     data = {
         "team_frame_percent": team_frame_percentage.to_dict(),
@@ -271,7 +272,7 @@ def clean_data(prop_frame, player_stats):
 
         total_sims = 5000
 
-        print(df)
+        # print(df)
 
         df.fillna(0, inplace=True)
         df.replace([np.inf, -np.inf], 0, inplace=True)
@@ -390,7 +391,6 @@ def clean_data(prop_frame, player_stats):
         sim_all_hold = pd.concat([sim_all_hold, leg_outcomes], ignore_index=True)
 
         final_outcomes = sim_all_hold
-        # print(final_outcomes)
         return final_outcomes
 
 
