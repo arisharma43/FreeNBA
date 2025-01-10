@@ -6,7 +6,6 @@ import gspread
 import json
 import pandas as pd
 import numpy as np
-import streamlit as st
 import io
 import math
 import warnings
@@ -39,11 +38,23 @@ class PlayerStats(BaseModel):
     edge: Optional[float] = None
 
 
+class PropTrend(BaseModel):
+    player: str
+    prop_type: str
+    prop: float
+    trending_over: float
+    trending_under: float
+    over_edge: float
+    under_edge: float
+    minutes: float
+
+
 class DataItem(BaseModel):
     team_frame_percent: dict
     team_frame_american: dict
     timestamp: str
     player_stats: List[PlayerStats]
+    prop_trend_table: List[PropTrend]
 
 
 @app.get("/api/python", response_model=List[DataItem])
@@ -78,7 +89,6 @@ async def read_data():
         ]
     ]
     team_frame_percentage = team_frame_percentage.set_index("Team")
-    print(team_frame_percentage)
     team_frame_american = game_model[
         [
             "Team",
@@ -96,17 +106,103 @@ async def read_data():
         ]
     ]
     team_frame_american = team_frame_american.set_index("Team")
-    print(team_frame_american)
+
+    prop_trend_table = generate_prop_trend_table(prop_frame, player_stats)
 
     data = {
         "team_frame_percent": team_frame_percentage.to_dict(),
         "team_frame_american": team_frame_american.to_dict(),
         "timestamp": timestamp,
         "player_stats": player_stats_to_list(prop_frame, player_stats),
+        "prop_trend_table": prop_trend_table,
     }
-    # print(data)
-    # print(player_stats_to_list(prop_frame, player_stats))
     return [DataItem(**data)]
+
+
+def generate_prop_trend_table(prop_frame, player_stats):
+    """
+    Generates the prop trend table based on player stats and prop frame data.
+    """
+    all_sim_vars = [
+        "NBA_GAME_PLAYER_POINTS",
+        "NBA_GAME_PLAYER_REBOUNDS",
+        "NBA_GAME_PLAYER_ASSISTS",
+        "NBA_GAME_PLAYER_POINTS_REBOUNDS_ASSISTS",
+        "NBA_GAME_PLAYER_POINTS_REBOUNDS",
+        "NBA_GAME_PLAYER_POINTS_ASSISTS",
+        "NBA_GAME_PLAYER_REBOUNDS_ASSISTS",
+        "NBA_GAME_PLAYER_3_POINTERS_MADE",
+    ]
+
+    prop_trend_list = []
+
+    for prop in all_sim_vars:
+        prop_df = prop_frame[
+            [
+                "Player",
+                "over_prop",
+                "over_line",
+                "under_line",
+                "PropType",
+                "Trending Over",
+                "Trending Under",
+                "Over Edge",
+                "Under Edge",
+            ]
+        ].loc[prop_frame["PropType"] == prop]
+
+        prop_df.rename(columns={"over_prop": "Prop"}, inplace=True)
+        prop_df["Over"] = 1 / prop_df["over_line"]
+        prop_df["Under"] = 1 / prop_df["under_line"]
+
+        # Create dictionaries for mapping
+        prop_dict = dict(zip(prop_df.Player, prop_df.Prop))
+        prop_type_dict = dict(zip(prop_df.Player, prop_df["PropType"]))
+        over_dict = dict(zip(prop_df.Player, prop_df.Over))
+        under_dict = dict(zip(prop_df.Player, prop_df.Under))
+        trending_over_dict = dict(zip(prop_df.Player, prop_df["Trending Over"]))
+        trending_under_dict = dict(zip(prop_df.Player, prop_df["Trending Under"]))
+        over_edge_dict = dict(zip(prop_df.Player, prop_df["Over Edge"]))
+        under_edge_dict = dict(zip(prop_df.Player, prop_df["Under Edge"]))
+
+        player_df = player_stats.copy()
+        player_df["Prop"] = player_df["Player"].map(prop_dict)
+        player_df["PropType"] = player_df["Player"].map(prop_type_dict)
+        player_df["Trending Over"] = player_df["Player"].map(trending_over_dict)
+        player_df["Trending Under"] = player_df["Player"].map(trending_under_dict)
+        player_df["Over Edge"] = player_df["Player"].map(over_edge_dict)
+        player_df["Under Edge"] = player_df["Player"].map(under_edge_dict)
+
+        # Combine prop data with player stats
+        prop_combined = player_df[
+            [
+                "Player",
+                "PropType",
+                "Prop",
+                "Trending Over",
+                "Trending Under",
+                "Over Edge",
+                "Under Edge",
+                "Minutes",
+            ]
+        ].dropna()
+
+        prop_combined = prop_combined.rename(
+            columns={
+                "Player": "player",
+                "PropType": "prop_type",
+                "Prop": "prop",
+                "Trending Over": "trending_over",
+                "Trending Under": "trending_under",
+                "Over Edge": "over_edge",
+                "Under Edge": "under_edge",
+                "Minutes": "minutes",
+            }
+        )
+
+        prop_trend_list.extend(prop_combined.to_dict(orient="records"))
+
+    return prop_trend_list
 
 
 # except Exception as e:
@@ -116,7 +212,6 @@ async def read_data():
 
 def player_stats_to_list(prop_frame, player_stats):
     finalized_data = clean_data(prop_frame, player_stats)
-    # print(finalized_data)
     player_stats_list = []
     for _, row in finalized_data.iterrows():
         for key, value in row.items():
@@ -124,7 +219,6 @@ def player_stats_to_list(prop_frame, player_stats):
                 value == float("inf") or value == float("-inf") or math.isnan(value)
             ):
                 row[key] = None
-        # print(row)
         player_stats_list.append(
             PlayerStats(
                 player=row["Player"],
@@ -211,7 +305,6 @@ def clean_data(prop_frame, player_stats):
         ]
     )
     player_df = player_stats.copy()
-    # print(prop_frame.columns.tolist())
     for prop in all_sim_vars:
         prop_df = prop_frame[
             [
@@ -272,7 +365,6 @@ def clean_data(prop_frame, player_stats):
 
         total_sims = 5000
 
-        # print(df)
 
         df.fillna(0, inplace=True)
         df.replace([np.inf, -np.inf], 0, inplace=True)
@@ -477,7 +569,6 @@ def init_baselines(gcservice_account, master_hold):
     sh = gcservice_account.open_by_url(master_hold)
     worksheet = sh.worksheet("Betting Model Clean")
     raw_display = pd.DataFrame(worksheet.get_all_records())
-    # print(raw_display.columns.tolist())
     raw_display.replace("#DIV/0!", np.nan, inplace=True)
     raw_display["PD Win%"] = (
         raw_display["PD Win%"].replace({"%": ""}, regex=True).astype(float) / 100
@@ -536,8 +627,6 @@ def init_baselines(gcservice_account, master_hold):
 
     worksheet = sh.worksheet("Prop_Frame")
     raw_display = pd.DataFrame(worksheet.get_all_records())
-    # print("Column Names in Google Sheet:")
-    # print(raw_display.columns.tolist())
     raw_display.replace("", np.nan, inplace=True)
 
     raw_display.rename(
