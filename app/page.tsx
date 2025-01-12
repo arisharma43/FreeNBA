@@ -11,8 +11,22 @@ import {
   TableRow,
   Paper,
   Typography,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import { SortableTable } from "./SortableTable";
+
+const propTypes = [
+  "NBA_GAME_PLAYER_POINTS",
+  "NBA_GAME_PLAYER_REBOUNDS",
+  "NBA_GAME_PLAYER_ASSISTS",
+  "NBA_GAME_PLAYER_POINTS_REBOUNDS_ASSISTS",
+  "NBA_GAME_PLAYER_POINTS_REBOUNDS",
+  "NBA_GAME_PLAYER_POINTS_ASSISTS",
+  "NBA_GAME_PLAYER_REBOUNDS_ASSISTS",
+];
 
 const Index = () => {
   const [timestamp, setTimestamp] = useState("");
@@ -20,6 +34,7 @@ const Index = () => {
   const [teamFrameP, setTeamFrameP] = useState({});
   const [playerStats, setPlayerStats] = useState([]);
   const [propTrendTable, setPropTrendTable] = useState([]);
+  const [selectedPropType, setSelectedPropType] = useState(propTypes[0]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,7 +42,6 @@ const Index = () => {
         const response = await axios.get("http://127.0.0.1:8000/api/python");
         const data = response.data[0];
         console.log(data);
-        console.log(data.team_frame_american["PD Team Points"]["NYK"]);
         setTeamFrameA(data.team_frame_american);
         setTeamFrameP(data.team_frame_percent);
         setTimestamp(data.timestamp);
@@ -101,8 +115,30 @@ const Index = () => {
     return { data: combinedData, columns };
   };
 
+  const preparePropTrendTable = (
+    propTrendTable: any[],
+    selectedProp: string
+  ) => {
+    const filteredData = propTrendTable.filter(
+      (item) => item.prop_type === selectedProp
+    );
+
+    const columns = [
+      "player",
+      "prop",
+      "trending_over",
+      "trending_under",
+      "minutes",
+      "over_edge",
+      "under_edge",
+    ];
+
+    return { data: filteredData, columns };
+  };
+
   const americanTable = prepareFrameA(teamFrameA);
   const percentTable = prepareFrameP(teamFrameP);
+  const propTrendData = preparePropTrendTable(propTrendTable, selectedPropType);
 
   return (
     <div>
@@ -124,6 +160,35 @@ const Index = () => {
         />
       ) : (
         <Typography variant="body1">No data available for Percent.</Typography>
+      )}
+      <div className="mt-8">
+        <FormControl fullWidth>
+          <InputLabel id="prop-type-select-label">Prop Type</InputLabel>
+          <Select
+            labelId="prop-type-select-label"
+            id="prop-type-select"
+            value={selectedPropType}
+            label="Prop Type"
+            onChange={(e) => setSelectedPropType(e.target.value)}
+          >
+            {propTypes.map((type) => (
+              <MenuItem key={type} value={type}>
+                {type}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </div>
+      {propTrendData.data.length > 0 ? (
+        <SortableTable
+          data={propTrendData.data}
+          columns={propTrendData.columns}
+          title={`Prop Trend Table - ${selectedPropType}`}
+        />
+      ) : (
+        <Typography variant="body1">
+          No data available for Prop Trends.
+        </Typography>
       )}
     </div>
   );

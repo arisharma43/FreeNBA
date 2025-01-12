@@ -136,7 +136,7 @@ export function SortableTable({ data, columns, title }: SortableTableProps) {
     ) {
       if (value >= 0.55) return { backgroundColor: "#1b5e20", color: "white" };
       if (value <= 0.45) return { backgroundColor: "#b71c1c", color: "white" };
-      return { backgroundColor: "#fff9c4" };
+      return { backgroundColor: "#a37f08" };
     }
 
     // Color logic for point totals and spreads
@@ -147,7 +147,7 @@ export function SortableTable({ data, columns, title }: SortableTableProps) {
     ) {
       if (value >= 115) return { backgroundColor: "#1b5e20", color: "white" };
       if (value <= 105) return { backgroundColor: "#b71c1c", color: "white" };
-      return { backgroundColor: "#fff9c4" };
+      return { backgroundColor: "#a37f08" };
     }
 
     return {};
@@ -245,7 +245,7 @@ export function SortableTable({ data, columns, title }: SortableTableProps) {
                   >
                     {typeof row[column] === "number"
                       ? column.includes("%")
-                        ? (row[column] * 100).toFixed(1) + "%"
+                        ? (row[column] * 100).toFixed(2) + "%"
                         : row[column].toFixed(3)
                       : row[column]}
                   </TableCell>
